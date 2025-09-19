@@ -37,6 +37,7 @@ from .public import (
     stream_ac as public_stream_ac,
     stream_microinverter as public_stream_microinverter,
     wave2 as public_wave2,
+    smart_home_panel_1 as public_smart_home_panel_1,
     smart_home_panel_2 as public_smart_home_panel_2,
 )
 from ..devices import BaseDevice, DiagnosticDevice
@@ -89,6 +90,8 @@ device_by_product: OrderedDict[str, Type[BaseDevice]] = OrderedDict[
         "Stream PRO": public_stream_ac.StreamAC,
         "Stream Ultra": public_stream_ac.StreamAC,
         "Stream Microinverter" : public_stream_microinverter.StreamMicroinveter,
+        "Smart Home Panel": public_smart_home_panel_1.SmartHomePanel1,
+        "Smart Home Panel 1": public_smart_home_panel_1.SmartHomePanel1,
         "Smart Home Panel 2": public_smart_home_panel_2.SmartHomePanel2,
         "Diagnostic": DiagnosticDevice,
     }
