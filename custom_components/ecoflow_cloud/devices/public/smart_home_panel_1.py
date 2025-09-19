@@ -4,8 +4,6 @@ from custom_components.ecoflow_cloud.button import EnabledButtonEntity
 
 import jsonpath_ng.ext as jp
 from datetime import datetime
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfPower
 
 from ...api import EcoflowApiClient
 from ...entities import (
@@ -14,17 +12,28 @@ from ...entities import (
     BaseSensorEntity,
     BaseSwitchEntity,
 )
-from ...number import ChargingPowerEntity, MaxBatteryLevelEntity, MinBatteryLevelEntity
+from ...number import MaxBatteryLevelEntity, MinBatteryLevelEntity
 from ...sensor import (
-    InWattsSensorEntity,
     LevelSensorEntity,
     OutWattsSensorEntity,
-    RemainSensorEntity,
     WattsSensorEntity,
-    MiscSensorEntity,
     MiscBinarySensorEntity,
 )
 from .. import BaseDevice, const
+
+# SHP MQTT command constants (cmdSet 11)
+CMD_SET_SHP = 11
+CMD_ID_RTC_UPDATE = 3
+CMD_ID_CIRCUIT_CTRL = 16
+CMD_ID_GRID_CHARGE = 17
+CMD_ID_EPS_MODE = 24
+CMD_ID_LIMITS = 29
+CMD_ID_CHANNEL_ENABLE = 26
+CMD_ID_SELF_CHECK = 112
+
+# System command set
+CMD_SET_SYS = 1
+CMD_ID_RESET = 20
 
 
 class CircuitModeSelectEntity(DictSelectEntity):
@@ -99,8 +108,8 @@ class CircuitModeSelectEntity(DictSelectEntity):
                 "sta": sta,
                 "ctrlMode": ctrl_mode,
                 "ch": self._ch,
-                "cmdSet": 11,
-                "id": 16,
+                "cmdSet": CMD_SET_SHP,
+                "id": CMD_ID_CIRCUIT_CTRL,
             },
         }
 
@@ -301,8 +310,8 @@ class SmartHomePanel1(BaseDevice):
                     "params": {
                         "discLower": int(params.get("limits.discLower", 0)),
                         "forceChargeHigh": int(value),
-                        "cmdSet": 11,
-                        "id": 29,
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_LIMITS,
                     },
                 },
             )
@@ -323,8 +332,8 @@ class SmartHomePanel1(BaseDevice):
                     "params": {
                         "discLower": int(value),
                         "forceChargeHigh": int(params.get("limits.forceChargeHigh", 100)),
-                        "cmdSet": 11,
-                        "id": 29,
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_LIMITS,
                     },
                 },
             )
@@ -335,17 +344,21 @@ class SmartHomePanel1(BaseDevice):
     def switches(self, client: EcoflowApiClient) -> list[BaseSwitchEntity]:
         switches: list[BaseSwitchEntity] = []
 
-        # EPS Mode switch (no direct heartbeat key; store state under 'epsState')
+        # EPS Mode switch (state is reported under 'epsModeInfo.eps')
         switches.append(
             EnabledEntity(
                 client,
                 self,
-                "'epsState'",
+                "'epsModeInfo.eps'",
                 const.EPS_MODE,
                 lambda value: {
                     "moduleType": 0,
                     "operateType": "TCP",
-                    "params": {"cmdSet": 11, "id": 24, "eps": 1 if int(value) == 1 else 0},
+                    "params": {
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_EPS_MODE,
+                        "eps": 1 if int(value) == 1 else 0,
+                    },
                 },
             )
         )
@@ -364,8 +377,8 @@ class SmartHomePanel1(BaseDevice):
                         "sta": 2 if int(value) == 1 else 0,
                         "ctrlMode": 1 if int(value) == 1 else 0,
                         "ch": 10,
-                        "cmdSet": 11,
-                        "id": 17,
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_GRID_CHARGE,
                     },
                 },
             )
@@ -385,12 +398,33 @@ class SmartHomePanel1(BaseDevice):
                         "sta": 2 if int(value) == 1 else 0,
                         "ctrlMode": 1 if int(value) == 1 else 0,
                         "ch": 11,
-                        "cmdSet": 11,
-                        "id": 17,
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_GRID_CHARGE,
                     },
                 },
             )
         )
+
+        # Per-circuit enable (0..9) using id 26
+        for i in range(10):
+            switches.append(
+                EnabledEntity(
+                    client,
+                    self,
+                    f"'emergencyStrategy.chSta'[{i}].isEnable",
+                    f"Circuit {i + 1} Enabled",
+                    lambda value, idx=i: {
+                        "moduleType": 0,
+                        "operateType": "TCP",
+                        "params": {
+                            "isEnable": 1 if int(value) == 1 else 0,
+                            "chNum": idx,
+                            "cmdSet": CMD_SET_SHP,
+                            "id": CMD_ID_CHANNEL_ENABLE,
+                        },
+                    },
+                )
+            )
 
         return switches
  
@@ -406,9 +440,10 @@ class SmartHomePanel1(BaseDevice):
                     "moduleType": 0,
                     "operateType": "TCP",
                     "params": {
-                        "cmdSet": 11,
-                        "id": 3,
-                        "week": int(datetime.now().strftime("%U")),
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_RTC_UPDATE,
+                        # ISO weekday: Monday=1 .. Sunday=7
+                        "week": datetime.now().isoweekday(),
                         "sec": datetime.now().second,
                         "min": datetime.now().minute,
                         "hour": datetime.now().hour,
@@ -417,7 +452,39 @@ class SmartHomePanel1(BaseDevice):
                         "year": datetime.now().year,
                     },
                 },
-            )
+                enabled=False,
+            ),
+            EnabledButtonEntity(
+                client,
+                self,
+                "'selfCheck'",
+                "Start Self-Check",
+                lambda value: {
+                    "moduleType": 0,
+                    "operateType": "TCP",
+                    "params": {
+                        "cmdSet": CMD_SET_SHP,
+                        "id": CMD_ID_SELF_CHECK,
+                        "selfCheckType": 1,
+                    },
+                },
+                enabled=False,
+            ),
+            EnabledButtonEntity(
+                client,
+                self,
+                "'reset'",
+                "Reset",
+                lambda value: {
+                    "moduleType": 0,
+                    "operateType": "TCP",
+                    "params": {
+                        "cmdSet": CMD_SET_SYS,
+                        "id": CMD_ID_RESET,
+                    },
+                },
+                enabled=False,
+            ),
         ]
 
     def selects(self, client: EcoflowApiClient) -> list[BaseSelectEntity]:
