@@ -126,9 +126,9 @@ class CircuitModeSelectEntity(DictSelectEntity):
 class AggregatedWattsSensorEntity(WattsSensorEntity):
     """Aggregated watts sensor that also supports energy integration via with_energy()."""
 
-    def __init__(self, client: EcoflowApiClient, device: BaseDevice, title: str, aggregator):
-        # Bind to infoList so we recompute on each heartbeat update
-        super().__init__(client, device, "infoList", title, enabled=True, auto_enable=True)
+    def __init__(self, client: EcoflowApiClient, device: BaseDevice, title: str, aggregator, unique_key: str = "infoList"):
+        # Bind to infoList so we recompute on each heartbeat update; use unique_key for unique_id
+        super().__init__(client, device, unique_key, title, enabled=True, auto_enable=True)
         self._aggregator = aggregator
 
     def _updated(self, data: dict):  # type: ignore[override]
@@ -180,6 +180,35 @@ class SmartHomePanel1(BaseDevice):
                     "Priority",
                     0,
                 )
+            )
+
+        # Per-circuit source-specific power sensors with energy
+        for i in range(10):
+            sensors.append(
+                AggregatedWattsSensorEntity(
+                    client,
+                    self,
+                    f"Breaker {i + 1} Battery Power",
+                    lambda info, idx=i: (
+                        float(info[idx].get("chWatt", 0))
+                        if (idx < len(info) and int(info[idx].get("powType", 0)) == 1)
+                        else 0.0
+                    ),
+                    unique_key=f"infoList.breaker{ i + 1 }.battery",
+                ).with_energy()
+            )
+            sensors.append(
+                AggregatedWattsSensorEntity(
+                    client,
+                    self,
+                    f"Breaker {i + 1} Grid Power",
+                    lambda info, idx=i: (
+                        float(info[idx].get("chWatt", 0))
+                        if (idx < len(info) and int(info[idx].get("powType", 0)) == 0)
+                        else 0.0
+                    ),
+                    unique_key=f"infoList.breaker{ i + 1 }.grid",
+                ).with_energy()
             )
 
         # Battery power entries often appear at indices 10 and 11 in infoList
@@ -259,6 +288,7 @@ class SmartHomePanel1(BaseDevice):
                 self,
                 "Circuits Combined Power",
                 lambda info: sum(float(item.get("chWatt", 0)) for item in info[:10]),
+                unique_key="infoList.total_circuits",
             ).with_energy()
         )
         sensors.append(
@@ -271,6 +301,7 @@ class SmartHomePanel1(BaseDevice):
                     for item in info[:10]
                     if int(item.get("powType", 0)) == 1
                 ),
+                unique_key="infoList.total_circuits_battery",
             ).with_energy()
         )
         sensors.append(
@@ -283,6 +314,7 @@ class SmartHomePanel1(BaseDevice):
                     for item in info[:10]
                     if int(item.get("powType", 0)) == 0
                 ),
+                unique_key="infoList.total_circuits_grid",
             ).with_energy()
         )
 
@@ -295,6 +327,7 @@ class SmartHomePanel1(BaseDevice):
                 lambda info: sum(
                     float(info[i].get("chWatt", 0)) for i in (10, 11) if i < len(info)
                 ),
+                unique_key="infoList.total_battery_combined",
             ).with_energy()
         )
 
@@ -422,26 +455,7 @@ class SmartHomePanel1(BaseDevice):
             )
         )
 
-        # Per-circuit enable (0..9) using id 26
-        for i in range(10):
-            switches.append(
-                EnabledEntity(
-                    client,
-                    self,
-                    f"'emergencyStrategy.chSta'[{i}].isEnable",
-                    f"Circuit {i + 1} Enabled",
-                    lambda value, idx=i: {
-                        "moduleType": 0,
-                        "operateType": "TCP",
-                        "params": {
-                            "isEnable": 1 if int(value) == 1 else 0,
-                            "chNum": idx,
-                            "cmdSet": CMD_SET_SHP,
-                            "id": CMD_ID_CHANNEL_ENABLE,
-                        },
-                    },
-                )
-            )
+        # Note: Removed per-circuit enable/disable switches from controls by request
 
         return switches
  
