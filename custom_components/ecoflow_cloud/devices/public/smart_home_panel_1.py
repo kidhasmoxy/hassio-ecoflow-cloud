@@ -393,7 +393,7 @@ class SmartHomePanel1(BaseDevice):
         )
 
         return switches
-@@
+ 
     def buttons(self, client: EcoflowApiClient):
         # Update Real-Time Clock button (id 3)
         return [
