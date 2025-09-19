@@ -300,7 +300,7 @@ class SmartHomePanel1(BaseDevice):
             MaxBatteryLevelEntity(
                 client,
                 self,
-                "'limits.forceChargeHigh'",
+                "'backupChaDiscCfg.forceChargeHigh'",
                 const.MAX_CHARGE_LEVEL,
                 50,
                 100,
@@ -308,7 +308,7 @@ class SmartHomePanel1(BaseDevice):
                     "moduleType": 0,
                     "operateType": "TCP",
                     "params": {
-                        "discLower": int(params.get("limits.discLower", 0)),
+                        "discLower": int(params.get("backupChaDiscCfg.discLower", 0)),
                         "forceChargeHigh": int(value),
                         "cmdSet": CMD_SET_SHP,
                         "id": CMD_ID_LIMITS,
@@ -322,7 +322,7 @@ class SmartHomePanel1(BaseDevice):
             MinBatteryLevelEntity(
                 client,
                 self,
-                "'limits.discLower'",
+                "'backupChaDiscCfg.discLower'",
                 const.MIN_DISCHARGE_LEVEL,
                 0,
                 30,
@@ -331,7 +331,7 @@ class SmartHomePanel1(BaseDevice):
                     "operateType": "TCP",
                     "params": {
                         "discLower": int(value),
-                        "forceChargeHigh": int(params.get("limits.forceChargeHigh", 100)),
+                        "forceChargeHigh": int(params.get("backupChaDiscCfg.forceChargeHigh", 100)),
                         "cmdSet": CMD_SET_SHP,
                         "id": CMD_ID_LIMITS,
                     },
