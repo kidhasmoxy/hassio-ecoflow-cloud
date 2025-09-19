@@ -6,7 +6,11 @@ import jsonpath_ng.ext as jp
 from datetime import datetime
 
 from ...api import EcoflowApiClient
+from homeassistant.components.number import NumberEntity
+from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.restore_state import RestoreEntity
 from ...entities import (
+    EcoFlowAbstractEntity,
     BaseNumberEntity,
     BaseSelectEntity,
     BaseSensorEntity,
@@ -18,6 +22,8 @@ from ...sensor import (
     OutWattsSensorEntity,
     WattsSensorEntity,
     MiscBinarySensorEntity,
+    QuotaStatusSensorEntity,
+    QuotaScheduledStatusSensorEntity,
 )
 from .. import BaseDevice, const
 
@@ -138,6 +144,8 @@ class AggregatedWattsSensorEntity(WattsSensorEntity):
 
 
 class SmartHomePanel1(BaseDevice):
+    DEFAULT_SCHEDULED_RELOAD_SEC = 300
+
     def sensors(self, client: EcoflowApiClient) -> list[BaseSensorEntity]:
         sensors: list[BaseSensorEntity] = []
 
@@ -290,6 +298,12 @@ class SmartHomePanel1(BaseDevice):
             ).with_energy()
         )
 
+        # Add diagnostic/status sensors to keep data fresh and maintain connection
+        # - QuotaStatusSensorEntity triggers on-demand REST refresh if MQTT is idle
+        # - SHP1QuotaScheduledStatusSensorEntity forces a periodic refresh (interval configurable)
+        sensors.append(QuotaStatusSensorEntity(client, self))
+        sensors.append(SHP1QuotaScheduledStatusSensorEntity(client, self))
+
         return sensors
 
     def numbers(self, client: EcoflowApiClient) -> list[BaseNumberEntity]:
@@ -338,6 +352,9 @@ class SmartHomePanel1(BaseDevice):
                 },
             )
         )
+
+        # Configuration: Scheduled refresh interval
+        numbers.append(ScheduledRefreshIntervalNumber(client, self))
 
         return numbers
 
@@ -528,3 +545,62 @@ class SmartHomePanel1(BaseDevice):
                     new_params2[f"{k}.{k2}"] = v2
 
         return {"params": new_params2, "raw_data": res}
+
+
+# Device-local configuration entity: sets scheduled quota refresh interval (seconds)
+class ScheduledRefreshIntervalNumber(NumberEntity, EcoFlowAbstractEntity, RestoreEntity):
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 60
+    _attr_native_max_value = 3600
+    _attr_native_step = 30
+    _attr_has_entity_name = True
+
+    def __init__(self, client: EcoflowApiClient, device: BaseDevice):
+        # Use unique key under the device for config
+        EcoFlowAbstractEntity.__init__(
+            self, client, device, "Status Scheduled Refresh Interval", "status.scheduled_interval"
+        )
+        # Initialize device property if missing
+        if not hasattr(self._device, "_shp1_reload_delay"):
+            setattr(self._device, "_shp1_reload_delay", SmartHomePanel1.DEFAULT_SCHEDULED_RELOAD_SEC)
+        self._attr_native_value = int(getattr(self._device, "_shp1_reload_delay"))
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable"):
+            try:
+                restored = int(float(last_state.state))
+                setattr(self._device, "_shp1_reload_delay", restored)
+                self._attr_native_value = restored
+            except Exception:
+                pass
+
+    async def async_set_native_value(self, value: float) -> None:
+        # Persist on the device instance so scheduled status sensor can pick it up
+        setattr(self._device, "_shp1_reload_delay", int(value))
+        self._attr_native_value = int(value)
+        self.schedule_update_ha_state()
+
+    def _handle_coordinator_update(self) -> None:
+        # No-op: value is purely a local config; but keep UI in sync if changed elsewhere
+        current = int(getattr(self._device, "_shp1_reload_delay", SmartHomePanel1.DEFAULT_SCHEDULED_RELOAD_SEC))
+        if self._attr_native_value != current:
+            self._attr_native_value = current
+            self.schedule_update_ha_state()
+
+
+# Scheduled status sensor that reads interval dynamically from the device property
+class SHP1QuotaScheduledStatusSensorEntity(QuotaScheduledStatusSensorEntity):
+    def __init__(self, client: EcoflowApiClient, device: BaseDevice):
+        reload_delay = int(
+            getattr(device, "_shp1_reload_delay", SmartHomePanel1.DEFAULT_SCHEDULED_RELOAD_SEC)
+        )
+        super().__init__(client, device, reload_delay=reload_delay)
+
+    def _actualize_status(self) -> bool:
+        # Update the interval dynamically before evaluating the schedule
+        self.offline_barrier_sec = int(
+            getattr(self._device, "_shp1_reload_delay", SmartHomePanel1.DEFAULT_SCHEDULED_RELOAD_SEC)
+        )
+        return super()._actualize_status()
