@@ -425,7 +425,7 @@ class SmartHomePanel1(BaseDevice):
                     "operateType": "TCP",
                     "params": {
                         "sta": 2 if int(value) == 1 else 0,
-                        "ctrlMode": 1 if int(value) == 1 else 0,
+                        "ctrlMode": 1,
                         "ch": 10,
                         "cmdSet": CMD_SET_SHP,
                         "id": CMD_ID_GRID_CHARGE,
@@ -446,7 +446,7 @@ class SmartHomePanel1(BaseDevice):
                     "operateType": "TCP",
                     "params": {
                         "sta": 2 if int(value) == 1 else 0,
-                        "ctrlMode": 1 if int(value) == 1 else 0,
+                        "ctrlMode": 1,
                         "ch": 11,
                         "cmdSet": CMD_SET_SHP,
                         "id": CMD_ID_GRID_CHARGE,
