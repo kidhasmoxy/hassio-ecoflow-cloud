@@ -538,10 +538,11 @@ class SmartHomePanel1(BaseDevice):
         new_params: dict[str, any] = {}
 
         # Merge nested content from 'param' and 'params' if present
-        if "param" in res and isinstance(res["param"], dict):
+        if "param" in res:
             for k, v in res["param"].items():
                 new_params[k] = v
-        if "params" in res and isinstance(res["params"], dict):
+
+        if "params" in res:
             for k, v in res["params"].items():
                 new_params[k] = v
 
