@@ -72,8 +72,11 @@ class CircuitModeSelectEntity(DictSelectEntity):
                 return True
             elif ctrl_mode == 1:
                 mapping = {0: "Grid", 1: "Battery", 2: "Off"}
-                self._current_option = mapping.get(int(val))
-                return self._current_option is not None
+                option = mapping.get(int(val))
+                if option is not None:
+                    self._current_option = option
+                    return True
+                return False
             return False
         except Exception:
             return False
