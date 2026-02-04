@@ -132,8 +132,20 @@ class SmartHomePanel(BaseDevice):
     def sensors(self, client: EcoflowApiClient) -> list[SensorEntity]:
         sensors = [
             LevelSensorEntity(client, self, "heartbeat.backupBatPer", const.COMBINED_BATTERY_LEVEL),
-            LevelSensorEntity(client, self, "heartbeat.energyInfos[0].batteryPercentage", const.BATTERY_N_LEVEL % 1),
-            LevelSensorEntity(client, self, "heartbeat.energyInfos[1].batteryPercentage", const.BATTERY_N_LEVEL % 2, False),
+            LevelSensorEntity(client, self, "heartbeat.energyInfos[0].batteryPercentage", const.BATTERY_N_LEVEL % 1)
+            .attr("heartbeat.energyInfos[0].stateBean.isConnect", "Connected", 0)
+            .attr("heartbeat.energyInfos[0].stateBean.isEnable", "Enabled", 0)
+            .attr("heartbeat.energyInfos[0].stateBean.isGridCharge", "Grid Charging", 0)
+            .attr("heartbeat.energyInfos[0].dischargeTime", "Discharge Time (min)", 0)
+            .attr("heartbeat.energyInfos[0].chargeTime", "Charge Time (min)", 0)
+            .attr("heartbeat.energyInfos[0].outputPower", "Output Power (W)", 0),
+            LevelSensorEntity(client, self, "heartbeat.energyInfos[1].batteryPercentage", const.BATTERY_N_LEVEL % 2, False)
+            .attr("heartbeat.energyInfos[1].stateBean.isConnect", "Connected", 0)
+            .attr("heartbeat.energyInfos[1].stateBean.isEnable", "Enabled", 0)
+            .attr("heartbeat.energyInfos[1].stateBean.isGridCharge", "Grid Charging", 0)
+            .attr("heartbeat.energyInfos[1].dischargeTime", "Discharge Time (min)", 0)
+            .attr("heartbeat.energyInfos[1].chargeTime", "Charge Time (min)", 0)
+            .attr("heartbeat.energyInfos[1].outputPower", "Output Power (W)", 0),
             RemainSensorEntity(client, self, "heartbeat.backupChaTime", const.REMAINING_TIME),
             RemainSensorEntity(client, self, "heartbeat.energyInfos[0].chargeTime", const.BATTERY_N_CHARGE_REMAINING_TIME % 1, False),
             RemainSensorEntity(client, self, "heartbeat.energyInfos[1].chargeTime", const.BATTERY_N_CHARGE_REMAINING_TIME % 2, False),
