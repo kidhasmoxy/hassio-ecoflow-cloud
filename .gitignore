@@ -12,3 +12,5 @@ tests
 tools
 mise.local.toml
 uv.lock
+
+shp_dash.yaml
