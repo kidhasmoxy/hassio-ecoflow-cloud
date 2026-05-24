@@ -364,16 +364,6 @@ class SmartHomePanel(BaseDevice):
                 },
                 enabled=False,
             ),
-            EnabledButtonEntity(
-                client, self, "'selfCheck'", "Start Self-Check",
-                lambda value: {"moduleType": 0, "operateType": "TCP", "params": {"cmdSet": 11, "id": 112, "selfCheckType": 1}},
-                enabled=False,
-            ),
-            EnabledButtonEntity(
-                client, self, "'reset'", "Reset",
-                lambda value: {"moduleType": 0, "operateType": "TCP", "params": {"cmdSet": 1, "id": 20}},
-                enabled=False,
-            ),
         ]
 
     def flat_json(self):
